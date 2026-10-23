@@ -10,7 +10,7 @@ from unittest import mock
 import pytest
 
 import xarray
-from xarray.util import _report
+from xarray.util import _report, print_versions
 
 
 # importing setuptools after distutils (done by some dependencies) warns
@@ -33,6 +33,35 @@ def test_show_versions_markdown() -> None:
     assert out.endswith("\n</details>\n")
     assert "| package " in out
     assert "| xarray " in out
+
+
+@pytest.mark.parametrize("markdown", [False, True])
+def test_show_versions_netcdf_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    markdown: bool,
+) -> None:
+    def raise_error() -> None:
+        raise OSError("cannot load netCDF library")
+
+    monkeypatch.setattr(print_versions, "netcdf_and_hdf5_versions", raise_error)
+    f = io.StringIO()
+
+    xarray.show_versions(file=f, markdown=markdown)
+
+    report = f.getvalue()
+    assert "libhdf5 / libnetcdf" in report
+    assert "error: cannot load netCDF library" in report
+    assert "INSTALLED VERSIONS" in report
+    assert "Not installed:" in report
+    if markdown:
+        assert report.startswith("<details>")
+        assert report.endswith("</details>\n")
+    else:
+        assert report.startswith("INSTALLED VERSIONS\n")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
 
 
 def test_package_version() -> None:
